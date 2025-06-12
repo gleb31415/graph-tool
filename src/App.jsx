@@ -3,9 +3,11 @@ import { Graph } from 'graphology'
 import Sigma from 'sigma'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import JSZip from 'jszip'
+import FirebaseService from './services/FirebaseService'
+import { AuthProvider } from './contexts/AuthContext'
 import './App.css'
 
-function App() {
+function AppWithAuth() {
   const containerRef = useRef(null)
   const sigmaRef = useRef(null)
   const graphRef = useRef(null)
@@ -19,6 +21,10 @@ function App() {
   const [firstNodeForEdge, setFirstNodeForEdge] = useState(null)
   const [showControls, setShowControls] = useState(true)
   const [backgroundColor, setBackgroundColor] = useState('#ffffff')
+  const [graphTitle, setGraphTitle] = useState('Untitled Graph')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('') // '', 'saving', 'saved', 'error', 'loading'
+  const [currentGraphId, setCurrentGraphId] = useState('default-graph') // Default graph ID
   
   // Use refs to store current state values for event handlers
   const isCreatingEdgeRef = useRef(isCreatingEdge)
@@ -39,45 +45,53 @@ function App() {
     const graph = new Graph()
     graphRef.current = graph
 
-    // Add some initial nodes
-    graph.addNode('node1', {
-      x: Math.random() * 2 - 1,
-      y: Math.random() * 2 - 1,
-      size: 15,
-      label: 'Main Idea',
-      description: 'This is the main concept of the project',
-      color: '#3b82f6',
-      shape: 'circle',
-      attachedFile: null
-    })
-    
-    graph.addNode('node2', {
-      x: Math.random() * 2 - 1,
-      y: Math.random() * 2 - 1,
-      size: 15,
-      label: 'Concept A',
-      description: 'First supporting concept',
-      color: '#10b981',
-      shape: 'circle',
-      attachedFile: null
-    })
-    
-    graph.addNode('node3', {
-      x: Math.random() * 2 - 1,
-      y: Math.random() * 2 - 1,
-      size: 15,
-      label: 'Concept B',
-      description: 'Second supporting concept',
-      color: '#f59e0b',
-      shape: 'circle',
-      attachedFile: null
-    })
-
-    // Add initial edges
-    graph.addEdge('node1', 'node2', { size: 2, color: '#64748b' })
-
-    // Apply force layout
-    forceAtlas2.assign(graph, { iterations: 50 })
+    // If we have a graphId, load from Firebase
+    if (currentGraphId) {
+      setSaveStatus('loading')
+      FirebaseService.getGraph(currentGraphId)
+        .then(graphData => {
+          if (graphData) {
+            setGraphTitle(graphData.title || 'Untitled Graph')
+            
+            // Clear any existing nodes/edges
+            graph.clear()
+            
+            // Import nodes
+            if (graphData.nodes && Array.isArray(graphData.nodes)) {
+              graphData.nodes.forEach(nodeData => {
+                const { id, ...attributes } = nodeData
+                graph.addNode(id, attributes)
+              })
+            }
+            
+            // Import edges
+            if (graphData.edges && Array.isArray(graphData.edges)) {
+              graphData.edges.forEach(edgeData => {
+                const { source, target, ...attributes } = edgeData
+                if (graph.hasNode(source) && graph.hasNode(target)) {
+                  try {
+                    graph.addEdge(source, target, attributes)
+                  } catch (e) {
+                    console.log('Error importing edge:', e)
+                  }
+                }
+              })
+            }
+            
+            setSaveStatus('')
+          }
+        })
+        .catch(error => {
+          console.error('Error loading graph:', error)
+          setSaveStatus('error')
+          
+          // Add default nodes if loading fails
+          addDefaultNodes(graph)
+        })
+    } else {
+      // Add default nodes for new graph
+      addDefaultNodes(graph)
+    }
 
     // Create sigma instance with dynamic background
     const sigma = new Sigma(graph, containerRef.current, {
@@ -97,6 +111,9 @@ function App() {
     })
     
     sigma.getContainer().style.backgroundColor = backgroundColor
+
+    // Apply force layout
+    forceAtlas2.assign(graph, { iterations: 50 })
 
     // Custom node renderer with proper shape support
     sigma.setSetting('defaultDrawNodeFunction', (context, data, settings) => {
@@ -187,6 +204,7 @@ function App() {
                 console.log('Creating edge between:', firstNodeForEdgeRef.current, 'and', nodeId)
                 graph.addEdge(firstNodeForEdgeRef.current, nodeId, { size: 2, color: '#64748b' })
                 console.log('Edge created successfully')
+                // Removed auto-save
               } else {
                 console.log('Edge already exists between these nodes')
               }
@@ -222,10 +240,9 @@ function App() {
       }
     })
     return () => { 
-      // dragListener.disable()
       sigma.kill() 
     }
-  }, [backgroundColor])
+  }, [backgroundColor, currentGraphId])
 
   const addNode = () => {
     const graph = graphRef.current
@@ -242,6 +259,8 @@ function App() {
       shape: 'circle',
       attachedFile: null
     })
+    
+    // Removed auto-save
   }
 
   const deleteNode = () => {
@@ -252,6 +271,8 @@ function App() {
     setSelectedNode(null)
     setNodeLabel('')
     setNodeDescription('')
+    
+    // Removed auto-save
   }
 
   const updateNodeLabel = () => {
@@ -259,6 +280,8 @@ function App() {
     if (!graph || !selectedNode || !nodeLabel.trim()) return
 
     graph.setNodeAttribute(selectedNode, 'label', nodeLabel.trim())
+    
+    // Removed auto-save
   }
 
   const updateNodeDescription = () => {
@@ -266,6 +289,8 @@ function App() {
     if (!graph || !selectedNode) return
 
     graph.setNodeAttribute(selectedNode, 'description', nodeDescription)
+    
+    // Removed auto-save
   }
 
   // --- Single file upload handler with optimized performance ---
@@ -652,8 +677,215 @@ function App() {
     '#8b5cf6', '#06b6d4', '#84cc16', '#f97316'
   ]
 
+  // Handle back button click
+  const onBack = () => {
+    // This would typically navigate back to a graph list view
+    alert('This would navigate back to the list of graphs.')
+    // For a real implementation, you might use React Router or another navigation method
+  }
+
+  // Helper function to add default nodes for new graphs
+  const addDefaultNodes = (graph) => {
+    // Add some initial nodes
+    graph.addNode('node1', {
+      x: Math.random() * 2 - 1,
+      y: Math.random() * 2 - 1,
+      size: 15,
+      label: 'Main Idea',
+      description: 'This is the main concept of the project',
+      color: '#3b82f6',
+      shape: 'circle',
+      attachedFile: null
+    })
+    
+    graph.addNode('node2', {
+      x: Math.random() * 2 - 1,
+      y: Math.random() * 2 - 1,
+      size: 15,
+      label: 'Concept A',
+      description: 'First supporting concept',
+      color: '#10b981',
+      shape: 'circle',
+      attachedFile: null
+    })
+    
+    graph.addNode('node3', {
+      x: Math.random() * 2 - 1,
+      y: Math.random() * 2 - 1,
+      size: 15,
+      label: 'Concept B',
+      description: 'Second supporting concept',
+      color: '#f59e0b',
+      shape: 'circle',
+      attachedFile: null
+    })
+
+    // Add initial edges
+    graph.addEdge('node1', 'node2', { size: 2, color: '#64748b' })
+  }
+
+  // Save graph to Firebase
+  const saveGraph = async () => {
+    console.log('Save Graph button clicked!');
+    if (!graphRef.current) {
+      console.error('Graph reference is not available');
+      return;
+    }
+    
+    setSaveStatus('saving')
+    
+    const graph = graphRef.current
+    const graphData = {
+      title: graphTitle,
+      nodes: [],
+      edges: []
+    }
+
+    // Export nodes with all their attributes
+    graph.forEachNode((node, attributes) => {
+      // Skip attached files for Firebase storage - they would make the payload too large
+      const { attachedFile, ...attrs } = attributes
+      graphData.nodes.push({
+        id: node,
+        ...attrs
+      })
+    })
+
+    // Export edges with all their attributes
+    graph.forEachEdge((edge, attributes, source, target) => {
+      graphData.edges.push({
+        id: edge,
+        source,
+        target,
+        ...attributes
+      })
+    })
+
+    try {
+      await FirebaseService.saveGraph(currentGraphId, graphData)
+      setSaveStatus('saved')
+      alert('Graph saved successfully!')
+    } catch (error) {
+      console.error('Error saving graph:', error)
+      setSaveStatus('error')
+      alert('Error saving graph. Please try again.')
+    } finally {
+      // Reset status after a delay
+      setTimeout(() => {
+        setSaveStatus('')
+      }, 3000)
+    }
+  }
+
+  // Load graph from Firebase
+  const loadGraph = async () => {
+    if (!graphRef.current) return
+    
+    setSaveStatus('loading')
+    
+    try {
+      const graphData = await FirebaseService.getGraph(currentGraphId)
+      
+      if (graphData) {
+        const graph = graphRef.current
+        
+        // Update graph title
+        setGraphTitle(graphData.title || 'Untitled Graph')
+        
+        // Clear existing graph
+        graph.clear()
+        
+        // Import nodes
+        if (graphData.nodes && Array.isArray(graphData.nodes)) {
+          graphData.nodes.forEach(nodeData => {
+            const { id, ...attributes } = nodeData
+            graph.addNode(id, attributes)
+          })
+        }
+        
+        // Import edges
+        if (graphData.edges && Array.isArray(graphData.edges)) {
+          graphData.edges.forEach(edgeData => {
+            const { source, target, ...attributes } = edgeData
+            if (graph.hasNode(source) && graph.hasNode(target)) {
+              try {
+                graph.addEdge(source, target, attributes)
+              } catch (e) {
+                console.log('Error importing edge:', e)
+              }
+            }
+          })
+        }
+        
+        // Apply layout
+        forceAtlas2.assign(graph, { iterations: 100 })
+        
+        // Reset selection
+        setSelectedNode(null)
+        setNodeLabel('')
+        setNodeDescription('')
+        
+        // Success message
+        alert('Graph loaded successfully!')
+        setSaveStatus('')
+      } else {
+        throw new Error('No graph data found')
+      }
+    } catch (error) {
+      console.error('Error loading graph:', error)
+      setSaveStatus('error')
+      alert('Error loading graph. Please try again.')
+      
+      // Reset status after a delay
+      setTimeout(() => {
+        setSaveStatus('')
+      }, 3000)
+    }
+  }
+
   return (
     <div className="app-container">
+      {/* Top bar with title and save */}
+      <div className="graph-topbar">
+        <button onClick={onBack} className="btn btn-small">
+          ← Back to Graphs
+        </button>
+        <div className="graph-title-container">
+          <input
+            type="text"
+            value={graphTitle}
+            onChange={(e) => setGraphTitle(e.target.value)}
+            placeholder="Untitled Graph"
+            className="graph-title-input"
+          />
+        </div>
+        <button 
+          onClick={saveGraph} 
+          className="btn btn-primary"
+          disabled={saveStatus === 'saving' || saveStatus === 'loading'}
+          title="Click to save your changes to Firebase"
+          style={{ 
+            fontWeight: 'bold',
+            fontSize: '14px',
+            padding: '10px 15px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            border: '2px solid #2563eb'
+          }}
+        >
+          {saveStatus === 'saving' ? 'Saving...' : 
+           saveStatus === 'saved' ? 'Saved!' : 
+           saveStatus === 'error' ? 'Error! Try again' : 
+           '💾 Save Graph'}
+        </button>
+        <button 
+          onClick={loadGraph} 
+          className="btn btn-secondary"
+          disabled={saveStatus === 'saving' || saveStatus === 'loading'}
+        >
+          {saveStatus === 'loading' ? 'Loading...' : 'Get Saved'}
+        </button>
+      </div>
+      
       {/* Controls Panel */}
       <div className={`controls-panel ${showControls ? 'visible' : 'hidden'}`}>
         <div className="controls-header">
@@ -901,6 +1133,15 @@ function App() {
         </p>
       </div>
     </div>
+  )
+}
+
+// Main App component that wraps everything with AuthProvider
+function App() {
+  return (
+    <AuthProvider>
+      <AppWithAuth />
+    </AuthProvider>
   )
 }
 
