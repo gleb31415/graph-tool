@@ -1,12 +1,39 @@
-# React + Vite
+# Graph Visualization Tool
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A powerful web-based graph visualization tool built with React, Sigma.js, and Firebase. Create, edit, and save interactive node-link diagrams with real-time collaboration features.
 
-Currently, two official plugins are available:
+## 🚀 Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Interactive Graph Creation**: Add nodes and edges with drag-and-drop functionality
+- **Real-time Saving**: Save your graphs to Firebase Realtime Database
+- **Multiple Node Shapes**: Support for circles, squares, and triangles
+- **File Attachments**: Attach files to nodes for rich content
+- **Export/Import**: Export graphs as JSON or ZIP files with attachments
+- **Customizable Styling**: Change colors, sizes, and background themes
+- **Force Layout**: Apply automatic force-directed layout algorithms
 
-## Expanding the ESLint configuration
+## 🔧 Technologies Used
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Frontend**: React + Vite
+- **Visualization**: Sigma.js + Graphology
+- **Backend**: Firebase Realtime Database
+- **Deployment**: GitHub Pages with GitHub Actions
+
+## 🌐 Live Demo
+
+Visit the live application: [https://gleb31415.github.io/graph-tool/](https://gleb31415.github.io/graph-tool/)
+
+## 🛠️ Development Setup
+
+1. Clone the repository
+2. Copy `.env.example` to `.env` and fill in your Firebase configuration
+3. Install dependencies: `npm install`
+4. Start development server: `npm run dev`
+
+## 📦 Building and Deployment
+
+The project automatically deploys to GitHub Pages via GitHub Actions when changes are pushed to the main branch.
+
+---
+
+*This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.*
